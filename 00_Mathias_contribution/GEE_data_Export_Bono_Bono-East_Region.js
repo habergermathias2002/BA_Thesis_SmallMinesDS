@@ -37,7 +37,10 @@ function maskS2clouds(image) {
   // Sentinel-2 speichert Helligkeitswerte im Bereich 0 bis 10.000.
   // Foundation Models erwarten meist Werte zwischen 0 und 1. 
   // Daher teilen wir hier durch 10000 (Skalierung).
-  return image.updateMask(mask).divide(10000); 
+  // .divide() erzeugt ein neues Image und verliert dabei alle Metadaten.
+  // copyProperties überträgt sie explizit zurück aufs neue Objekt.
+  return image.updateMask(mask).divide(10000)
+    .copyProperties(image, image.propertyNames());
 }
 
 
@@ -104,4 +107,30 @@ Export.image.toDrive({
   maxPixels: 1e13,                             // Erhöhtes Limit, da Bono recht groß ist
   crs: 'EPSG:32630'                            // Das Koordinatensystem für Westafrika 
                                                // (UTM Zone 30N). Verhindert Verzerrungen.
+});
+
+// ------------------------------------------------------------------------------
+// 7. STRUKTURIERTE ÜBERSICHT DER GENUTZTEN SZENEN
+// ------------------------------------------------------------------------------
+// Extrahiert nur die relevanten Felder jedes Bildes als kompakte Tabelle
+var sceneInfo = s2.map(function(image) {
+  return ee.Feature(null, {
+    'scene_id':          image.get('system:index'),
+    'date':              ee.Date(image.get('system:time_start')).format('YYYY-MM-dd'),
+    'cloudy_pct':        image.get('CLOUDY_PIXEL_PERCENTAGE'),
+    'mgrs_tile':         image.get('MGRS_TILE'),
+    'spacecraft':        image.get('SPACECRAFT_NAME'),
+    'sensing_orbit':     image.get('SENSING_ORBIT_NUMBER'),
+  });
+});
+
+print('Anzahl Szenen:', s2.size());
+print('Szenen-Übersicht:', sceneInfo);
+
+// Export als CSV nach Google Drive
+Export.table.toDrive({
+  collection:  sceneInfo,
+  description: 'Sentinel2_Bono_Januar2025_Szenen',
+  folder:      'GEE_Galamsey_Exports',
+  fileFormat:  'CSV'
 });
