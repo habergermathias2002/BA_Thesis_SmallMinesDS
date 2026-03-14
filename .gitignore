@@ -1,3 +1,15 @@
 output*
 data/raw/
+data/patches_bono_test/
+.DS_Store
+
+Hugging_Face_Input/SmallMinesDS/
+Hugging_Face_Input/SmallMinesDS.zip
+
+models/
+*.ckpt
+*.pt
+*.pth
+*.torch
+
 00_Mathias_contribution/Overview_extracted_data_GEE.json
