@@ -1,11 +1,21 @@
 output*
+.DS_Store
+.venv/
+Miniforge3-MacOSX-arm64.sh
+
+# ── Große Daten (nicht pushen) ─────────────────────────────────────────────
 data/raw/
 data/patches_bono_test/
-.DS_Store
+data/inference_bono_full/
+data/GhanaMiningPrithvi/
+data/cache/
+data/ghana_map_galamsey_bono.png
 
+# HuggingFace / SmallMinesDS
 Hugging_Face_Input/SmallMinesDS/
 Hugging_Face_Input/SmallMinesDS.zip
 
+# Modelle / Checkpoints (groß)
 models/
 *.ckpt
 *.pt
