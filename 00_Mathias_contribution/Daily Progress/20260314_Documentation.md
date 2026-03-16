@@ -8,13 +8,18 @@
 
 | Step | Status | Notes |
 |------|--------|--------|
-| 1. Prepare dataset (`01_prepare_dataset.py`) | Done | 4,270/4,270 patches copied → 2,983 training + 1,287 validation |
-| 2. Upload `GhanaMiningPrithvi` to Google Drive | Done | — |
+| 1. Prepare dataset (`01_prepare_dataset.py`) | **Neu: v2 mit Band-Fix** | Extrahiert jetzt die 6 korrekten Bänder [0,1,2,7,8,9] aus 13-Band-TIFs → 6-Band-GeoTIFFs. **Muss erneut ausgeführt werden!** |
+| 2. Upload `GhanaMiningPrithvi` to Google Drive | Erneut nötig | Neue 6-Band-Dateien müssen hochgeladen werden |
 | 3. Extract Bono test patches (`02_extract_bono_test_patches.py`) | Done | 16 patches in `data/patches_bono_test/`, center 8.054635, -2.025502, UTM E=607379.5 N=890465.8 |
-| 4. Train on Colab (`Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb`) | Done | Training durchgeführt; bester Checkpoint auf Drive in `checkpoints/prithvi-v2-300/` |
-| 5. Download checkpoint → run inference (`04_inference_bono.py`) | Pending / optional lokal | Checkpoint in `models/` ablegen; lokal Conda/venv mit gefilterten requirements (ohne bitsandbytes/NVIDIA/triton) oder Inference in Colab |
+| 4. Train on Colab (Colab Notebook) | **Erneut nötig** | Neutraining mit korrekt extrahierten 6-Band-Daten (gleicher Trainingsscript, gleiche Means/Stds) |
+| 5. Download checkpoint → run inference (`04_inference_bono.py`) | Erneut nötig | Mit neuem Checkpoint |
+| 6. Inferenz auf gesamter Bono-Region (`05_inference_bono_full.py`) | Optional / getestet | Mit `LIMIT_PATCHES=100` getestet; volle Region: viele Stunden auf CPU |
+| 7. Ghana-Karte mit Galamsey-Overlay (`06_ghana_map_galamsey_bono.py`) | Done | `data/ghana_map_galamsey_bono.png`; nutzt Downsampling für große Raster (OOM-Vermeidung) |
+| 8. Modell-Check / Proof (`plot_model_proof.py`) | Angepasst (6-Band) | An 6-Band-Format angepasst; nach Neutraining erneut ausführen |
+| 9. Bono-Vergleichsbild (`plot_bono_test_comparison.py`) | Done | Gleiches Layout wie Proof, für Bono-Testregion → nach Neutraining erneut erstellen |
+| 10. Diagnose Bono-Inferenz | Done | **Root Cause gefunden: Band-Mismatch** (Training: B2–B7; Inferenz: B2,B3,B4,B8A,B11,B12). Siehe Technical Report v1.3 |
 
-**Environment:** macOS — use `python3` (not `python`) for all scripts.
+**Environment:** macOS — use Conda env `smallmines`; `python` bzw. `python3` für alle Skripte. MPS (Metal) für PyTorch deaktiviert in `05_*` (Adaptive-Pool-Bug).
 
 ---
 
@@ -30,28 +35,45 @@ The SmallMinesDS dataset (4,270 labeled patches, SW Ghana, 2016 + 2022) is avail
 
 ## Files Created
 
-- **Scripts:** `00_Mathias_contribution/scripts/` — all new scripts are independent from the original repo (no files modified).
-- **Colab training:** `00_Mathias_contribution/Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb` — the main notebook used for training on Google Colab.
+- **Scripts:** `00_Mathias_contribution/scripts/` — alle Skripte sind unabhängig vom Original-Repo (keine Änderung an Repo-Dateien).
+- **Colab training:** `00_Mathias_contribution/Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb` — Haupt-Notebook für das Training auf Google Colab.
+
+**Übersicht aller Skripte (in Ausführungsreihenfolge):**
+
+| Skript | Kurzbeschreibung |
+|--------|------------------|
+| `01_prepare_dataset.py` | SmallMinesDS aus HuggingFace-Struktur → flache Ordner `training/` und `validation/` |
+| `02_extract_bono_test_patches.py` | 5×5 km Bono-Testgebiet → 16× 128×128 GeoTIFFs in `data/patches_bono_test/` |
+| `03_train_colab.ipynb` / Colab Notebook | Training Prithvi-EO v2 auf SmallMinesDS (Colab GPU) |
+| `04_inference_bono.py` | Inferenz auf 16 Bono-Test-Patches → GeoTIFFs + 3-Panel-Visualisierung |
+| `05_inference_bono_full.py` | Inferenz auf ganzem Bono-Mosaik (fensterweise); `LIMIT_PATCHES` für Schnelltest |
+| `06_ghana_map_galamsey_bono.py` | Karte Ghana + Bono mit Mining-Wahrscheinlichkeit (rot) |
+| `make_bono_test_mosaic_png.py` | Stitch der 16 Patches zu einem 512×512 True-Color-PNG |
+| `plot_galamsey_probability_map.py` | Weiß-Rot-Heatmap der P(Mining) für Testregion aus `prediction_prob.tif` |
+| `plot_model_proof.py` | **Proof:** Satellitenbild + Mining-Wahrscheinlichkeit für SmallMinesDS-Trainings-Patches |
+| `plot_bono_test_comparison.py` | **Bono-Vergleich:** Gleiches Layout wie Proof für die 5×5 km Bono-Testregion (Satellitenbild | P(Mining)) → zeigt nicht plausible Vorhersage |
 
 ---
 
-### `01_prepare_dataset.py`
+### `01_prepare_dataset.py` (v2 — Band-Fix)
 
-**Purpose:** Copies and renames SmallMinesDS files into the flat `training/` and `validation/` folder structure expected by the training script.
+**Purpose:** Extracts the 6 correct Prithvi bands from 13-band SmallMinesDS GeoTIFFs and saves them as 6-band files in the flat `training/` and `validation/` folder structure.
 
-**The problem it solves:**
-The HuggingFace data uses naming like `IMG_GH_1755_2022.tif` / `MASK_GH_1755_2022.tif`. The training script expects files ending in `*_IMG.tif` and `*_MASK.tif` (suffix-based grep). Without renaming, the training script finds no files.
+**The problem it solves (v2 — Band-Fix):**
+1. **Renaming:** HuggingFace uses `IMG_GH_1755_2022.tif`; training expects `*_IMG.tif`.
+2. **Band-Extraktion (NEU):** SmallMinesDS-TIFs haben 13 Bänder. TerraTorch nimmt bei `dataset_bands = output_bands = [6 Namen]` immer die **ersten 6 Kanäle** (Indizes 0–5). In den 13-Band-Dateien sind das B2, B3, B4, **B5, B6, B7** — aber das Prithvi-Modell erwartet B2, B3, B4, **B8A, B11, B12** (Indizes 0, 1, 2, 7, 8, 9). Dieser **Band-Mismatch** war die Root Cause für die fehlgeschlagene Bono-Inferenz (→ Technical Report v1.3). Die v2 des Scripts extrahiert die korrekten 6 Bänder direkt aus den 13-Band-Dateien.
 
 **What it does:**
 - Reads `train_test_splits_2022.csv` and `train_test_splits_2016.csv`
-- For each patch: copies IMG and MASK to `data/GhanaMiningPrithvi/training/` or `.../validation/` based on the `split` column
-- Renames: `IMG_GH_1755_2022.tif` → `GH_1755_2022_IMG.tif`
+- For each patch: reads the 13-band IMG TIF, extracts bands `[0, 1, 2, 7, 8, 9]` (B2, B3, B4, B8A, B11, B12), writes a new 6-band GeoTIFF
+- Masks (1 band) are copied unchanged
+- Output naming: `GH_1755_2022_IMG.tif` (6 bands), `GH_1755_2022_MASK.tif`
 
 **Output:**
 ```
 data/GhanaMiningPrithvi/
-    training/    ← ~2,983 patch pairs (train split from both years)
-    validation/  ← ~1,287 patch pairs (test split from both years)
+    training/    ← ~2,983 patch pairs (6-band IMG + 1-band MASK)
+    validation/  ← ~1,287 patch pairs
 ```
 
 **Usage (run from repo root):**
@@ -148,12 +170,13 @@ patch_XXXX.tif (6 bands, 128×128, raw DN)
 reassemble 16 patches → full 512×512 px prediction map
 ```
 
-**Normalization applied:**
-```
-normalized = (raw_value − mean) / std
-means = [1473.81, 1703.35, 1696.68, 3832.40, 3156.11, 2226.07]
-stds  = [  223.44,  285.54,  413.82,  389.61,  451.50,  468.27]
-```
+**Normalization applied:**  
+Aktuell können **Bono-spezifische** Mittelwerte/Std genutzt werden (im Skript als Alternative zu SmallMinesDS auskommentiert bzw. umschaltbar). Für die **Trainingsdomäne** (Proof) müssen SmallMinesDS-Statistiken verwendet werden.
+
+- **SmallMinesDS (Training/Proof):**  
+  `means = [1473.81, 1703.35, 1696.68, 3832.40, 3156.11, 2226.07]`,  
+  `stds = [223.44, 285.54, 413.82, 389.61, 451.50, 468.27]`
+- **Bono (Testregion):** Werte aus allen 16 Test-Patches geschätzt; gleiche Formel `(raw − mean) / std`. Mit Bono-Stats steigt die vorhergesagte Mining-Wahrscheinlichkeit stark an, die räumliche Verteilung wirkt aber **zufällig** (Domain Shift, siehe Diagnose).
 
 **Outputs:**
 
@@ -208,6 +231,95 @@ python 00_Mathias_contribution/scripts/06_ghana_map_galamsey_bono.py
 
 ---
 
+### `make_bono_test_mosaic_png.py`
+
+**Zweck:** Stellt die 16 Bono-Test-Patches zu einem einzigen 512×512 True-Color-PNG zusammen (10 m/px). Nützlich, um die Testregion auf einen Blick zu sehen, ohne in QGIS alle Patches zu laden.
+
+**Ausgabe:** `data/patches_bono_test/full_test_area_truecolor.png`
+
+**Aufruf:** Nach `02_extract_bono_test_patches.py` und optional nach Inferenz:
+```bash
+python 00_Mathias_contribution/scripts/make_bono_test_mosaic_png.py
+```
+
+---
+
+### `plot_galamsey_probability_map.py`
+
+**Zweck:** Erzeugt eine Weiß-Rot-Heatmap der Mining-Wahrscheinlichkeit für die Bono-Testregion. Liest `prediction_prob.tif` aus `data/patches_bono_test/` und skaliert die Darstellung an den tatsächlichen Wertebereich (auch sehr kleine Werte sichtbar).
+
+**Ausgabe:** `data/patches_bono_test/galamsey_probability_map.png`
+
+**Voraussetzung:** `04_inference_bono.py` muss zuvor gelaufen sein.
+
+---
+
+### `plot_model_proof.py` (Modell-Check / Proof)
+
+**Zweck:** Beweis, dass das Modell auf der **Trainingsdomäne** (SmallMinesDS) korrekt funktioniert. Zeigt für mehrere Trainings-Patches (mit bekanntem Mining-Anteil) nebeneinander:
+- **Links:** 10×10 m Satellitenbild (True Color)
+- **Rechts:** Mining-Wahrscheinlichkeit (weiß = kein Mining, rot = Mining)
+
+Mining-Patches werden mit hoher Wahrscheinlichkeit rot erkannt; Non-Mining-Patches bleiben weiß. Damit ist belegt, dass das Problem bei der Bono-Inferenz **nicht** am Modell oder am Code liegt, sondern am **Domain Shift** (andere Region/Zeit).
+
+**Ausgabe:** `data/model_proof_on_training_patches.png`
+
+**Aufruf:** Checkpoint in `models/` erforderlich.
+```bash
+python 00_Mathias_contribution/scripts/plot_model_proof.py
+```
+
+---
+
+### `plot_bono_test_comparison.py` (Bono-Vergleichsbild)
+
+**Zweck:** Erzeugt ein **Vergleichsbild im gleichen Layout wie der Proof** – aber für die **Bono-Testregion** (5×5 km). Links: True-Color-Satellitenbild der Testfläche, Rechts: Mining-Wahrscheinlichkeit (weiß–rot). Dient als Gegenstück zum Proof: Hier funktioniert die Vorhersage **nicht** plausibel (Domain Shift); die räumliche Verteilung wirkt zufällig bzw. passt nicht zu bekannten Galamsey-Standorten.
+
+**Ausgabe:** `data/patches_bono_test/bono_test_comparison.png`
+
+**Voraussetzung:** `02_extract_bono_test_patches.py` und `04_inference_bono.py` müssen ausgeführt sein (`prediction_prob.tif` in `patches_bono_test/`).
+
+**Aufruf:**
+```bash
+python 00_Mathias_contribution/scripts/plot_bono_test_comparison.py
+```
+
+**Für die Arbeit:** Proof (`model_proof_on_training_patches.png`) und Bono-Vergleich (`bono_test_comparison.png`) zusammen zeigen: Modell funktioniert auf Trainingsdomäne, liefert auf Bono keine plausible Galamsey-Erkennung.
+
+---
+
+## Diagnose & Interpretation der Inferenz-Ergebnisse
+
+**Beobachtung:** Auf der Bono-Region liefert das Modell entweder nahezu überall 0 % Mining oder – bei Bono-Normalisierung – hohe, aber räumlich **zufällig wirkende** Mining-Wahrscheinlichkeiten, die nicht mit bekannten Galamsey-Standorten übereinstimmen.
+
+**Root Cause (verifiziert): Band-Mismatch im Training**
+
+Der Hauptfehler wurde durch eine detaillierte Analyse des TerraTorch-Codes und der SmallMinesDS-Bandordnung identifiziert (→ `Technical_Report_Inference_Diagnosis.md` v1.3, Section 11.3–11.4):
+
+| | Training (IST) | Training (SOLL) | Inferenz (Bono) |
+|--|---------------|-----------------|-----------------|
+| **Bänder** | B2, B3, B4, **B5, B6, B7** (Indizes 0–5 der 13-Band-Datei) | B2, B3, B4, **B8A, B11, B12** (Indizes 0,1,2,7,8,9) | B2, B3, B4, **B8A, B11, B12** |
+| **Means/Stds** | für B2,B3,B4,B8A,B11,B12 (korrekt berechnet, aber auf falsche Bänder angewendet) | gleich | gleich |
+
+**Warum:** TerraTorch berechnet `filter_indices = [dataset_bands.index(b) for b in output_bands]`. Da `dataset_bands` und `output_bands` beide `["BLUE","GREEN","RED","VNIR_5","SWIR_1","SWIR_2"]` sind, ergibt das `[0,1,2,3,4,5]` → immer die ersten 6 Kanäle der Datei. Bei 13-Band-Dateien sind das B2–B7 statt der gewünschten B2,B3,B4,B8A,B11,B12.
+
+**Fix implementiert:** `01_prepare_dataset.py` extrahiert jetzt Bänder `[0,1,2,7,8,9]` aus den 13-Band-TIFs und speichert 6-Band-Dateien. Damit liest TerraTorch die richtigen Kanäle.
+
+**Zusätzliche Faktoren (sekundär):**
+
+| Ursache | Bewertung | Maßnahme |
+|--------|------------|----------|
+| Domain Shift (Ort/Zeit: SW Ghana 2016/2022 vs. Bono 2025) | Mittel–Hoch | Nach Neutraining evaluieren; ggf. Fine-Tuning mit Bono-Labels |
+| Normalisierung (Bono vs. SmallMinesDS) | Getestet | Bono-Stats → hohe, unplausible Vorhersagen; SmallMinesDS-Stats nach Band-Fix erneut testen |
+| Backbone eingefroren | Mittel | Beim nächsten Training ggf. Backbone (teilweise) auftauen |
+| Klassenungleichgewicht | Gering | Modell-Check auf Trainings-Patches bestätigt: Modell arbeitet korrekt |
+
+**Proof vs. Bono-Vergleich:**
+- **Proof:** `plot_model_proof.py` → `data/model_proof_on_training_patches.png`. Zeigt: Modell erkennt auf SmallMinesDS-Patches Mining (Mining → rot, Non-Mining → weiß). Hinweis: bisheriger Proof basiert auf falschem Band-Set; nach Neutraining erneut erstellen.
+- **Bono-Vergleich:** `plot_bono_test_comparison.py` → `data/patches_bono_test/bono_test_comparison.png`. Vorhersage mit altem Modell nicht plausibel → nach Neutraining erneut evaluieren.
+
+---
+
 ## Pipeline Overview
 
 ```
@@ -219,26 +331,34 @@ SmallMinesDS (local)           Bono_Merged_2025.tif (local)
       ▼                                    ▼
 data/GhanaMiningPrithvi/       data/patches_bono_test/
   training/ + validation/        16 × 128×128 GeoTIFFs
-      │
-      ▼
+      │                                    │
+      ▼                                    ├→ make_bono_test_mosaic_png.py → full_test_area_truecolor.png
 Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb  (Google Colab — ~3–5 h)
       │
       ▼
-models/prithvi-v2-300-best.ckpt  (download from Drive)
+models/*.ckpt  (download from Drive)
+      │
+      ├→ plot_model_proof.py  (Proof auf Trainings-Patches) → data/model_proof_on_training_patches.png
       │
       ▼ (combined with patches)
 04_inference_bono.py  (Testregion 5×5 km)
       │
       ▼
-prediction_* in data/patches_bono_test/
-
+prediction_*.tif, prediction_visualization.png in data/patches_bono_test/
+      │
+      ├→ plot_galamsey_probability_map.py → galamsey_probability_map.png
+      ├→ plot_bono_test_comparison.py → bono_test_comparison.png (Vergleichsbild wie Proof, für Bono)
+      │
 Optional: Gesamte Bono-Region
       │
       ▼
-05_inference_bono_full.py  (volles Mosaik, fensterweise)
+05_inference_bono_full.py  (volles Mosaik, fensterweise; LIMIT_PATCHES für Test)
       │
       ▼
 prediction_* in data/inference_bono_full/
+      │
+      ▼
+06_ghana_map_galamsey_bono.py → data/ghana_map_galamsey_bono.png
 ```
 
 ---
@@ -269,15 +389,38 @@ Both datasets use the same 6-band selection and order. No reordering needed.
 ### Viewing the 5×5 km patches in QGIS (true color)
 The 16 patches live in `data/patches_bono_test/`. By default QGIS may show a false-color composite. For a **Google-Maps-like (true color)** view: Layer Properties → Symbology → Render type **Multiband color** → **Red band = 3**, **Green band = 2**, **Blue band = 1**. Set min/max to **Min/max** or **Cumulative count cut** for better contrast (values are 0–10,000).
 
+### macOS / Apple Silicon
+- **05_inference_bono_full.py:** Verwendet bewusst `device="cpu"`, da MPS (Metal) bei PyTorch einen Bug bei `adaptive_avg_pool2d` hat (nicht teilbare Input-/Output-Größen).
+- **06_ghana_map_galamsey_bono.py:** Große Inferenz-Raster werden vor der Reprojektion auf max. 2000×2000 px herunterskaliert, um Speicherüberlauf (OOM) zu vermeiden.
+
 ---
 
-## Next Steps
+## Next Steps — Band-Fix Workflow
 
-- [x] Run `01_prepare_dataset.py` locally to prepare the data
+### Sofort (Band-Fix → Neutraining)
+
+1. [ ] `01_prepare_dataset.py` **erneut ausführen** → erzeugt 6-Band-GeoTIFFs in `data/GhanaMiningPrithvi/`
+2. [ ] Alte `data/GhanaMiningPrithvi/` auf Drive **ersetzen** (oder löschen + neu hochladen)
+3. [ ] **Neutraining auf Colab** (`Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb`) — gleicher Script, gleiche Means/Stds, gleiche Hyperparameter; einziger Unterschied: korrekte 6-Band-Eingabedaten
+4. [ ] Neuen Checkpoint herunterladen → `models/`
+5. [ ] `04_inference_bono.py` mit **SmallMinesDS Means/Stds** auf Bono-Test-Patches ausführen
+6. [ ] `plot_model_proof.py` erneut ausführen (neuer Proof mit korrektem Modell)
+7. [ ] `plot_bono_test_comparison.py` erneut ausführen → Bono-Ergebnis evaluieren
+
+### Danach evaluieren
+
+- [ ] Wenn Bono-Ergebnis plausibel: `05_inference_bono_full.py` auf gesamter Region ausführen
+- [ ] Wenn Bono-Ergebnis weiterhin unplausibel: Domain Shift bestätigt → Fine-Tuning mit Bono-Labels nötig
+- [ ] QGIS: Ergebnisse mit True-Color-Patches vergleichen
+- [ ] Franzi: Ergebnisse + Diagnose mitteilen
+
+### Bereits erledigt
+
+- [x] Run `01_prepare_dataset.py` locally (v1: 13-Band-Kopie)
 - [x] Upload `data/GhanaMiningPrithvi/` to Google Drive
-- [x] Run `02_extract_bono_test_patches.py` (16 patches in `data/patches_bono_test/`)
-- [x] Train on Colab (`Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb`) — Checkpoints auf Drive
-- [ ] Download checkpoint from Drive to `models/` (z. B. `prithvi-v2-300-best.ckpt`)
-- [ ] Run `04_inference_bono.py` (lokal mit Conda oder in Colab) → first prediction map
-- [ ] Open `prediction_binary.tif` and `prediction_prob.tif` in QGIS; compare with true-color patches (R=3, G=2, B=1)
-- [ ] Write mail to Franzi with results + request for micro-data coordinates
+- [x] Run `02_extract_bono_test_patches.py` (16 patches)
+- [x] Train on Colab (v1: mit falschem Band-Set)
+- [x] Download checkpoint; Run inference → prediction maps
+- [x] Modell-Check: `plot_model_proof.py` (v1: auf falschem Band-Set)
+- [x] Diagnose: **Root Cause = Band-Mismatch** (Technical Report v1.3); Domain Shift als Sekundärfaktor
+- [x] Band-Fix implementiert in `01_prepare_dataset.py` (v2) und `plot_model_proof.py`

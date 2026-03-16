@@ -316,8 +316,10 @@ Diagramm zur Datei-Benennungskonvention des Datensatzes:
 ### `00_Mathias_contribution/`
 
 Verzeichnis für die eigenen Beiträge im Rahmen der Bachelorarbeit.
-Enthält diese Dokumentationsdatei sowie zukünftige eigene Experimente,
-Analysen und Erweiterungen des Projekts.
+
+- **Skripte** (`scripts/`): Datenvorbereitung (01), Bono-Patch-Extraktion (02), Colab-Training (03), Inferenz Testregion (04) und gesamte Bono-Region (05), Ghana-Karte mit Galamsey-Overlay (06), True-Color-Mosaic (`make_bono_test_mosaic_png.py`), Galamsey-Heatmap (`plot_galamsey_probability_map.py`), **Modell-Check/Proof** (`plot_model_proof.py` – Satellitenbild + Weiß-Rot-Grafik auf SmallMinesDS-Patches), **Bono-Vergleichsbild** (`plot_bono_test_comparison.py` – gleiches Layout für Bono-Testregion, zeigt nicht plausible Vorhersage).
+- **Colab Notebook:** `Colab Notebook/BA_Thesis_Model_Training_SmallMinesDS_data.ipynb` – Training Prithvi-EO v2 auf SmallMinesDS.
+- **Dokumentation:** `Daily Progress/20260314_Documentation.md` – Pipeline, alle Skripte, Diagnose. **`Inference_warum_kein_Galamsey.md`** – Ursachenanalyse (Domain Shift, Normalisierung, Backbone, etc.) und empfohlene nächste Schritte.
 
 ---
 

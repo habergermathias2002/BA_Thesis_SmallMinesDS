@@ -22,4 +22,7 @@ models/
 *.pth
 *.torch
 
+# Mikrodaten / sensible Dateien (kompletter Ordner)
+01_Microdata/
+
 00_Mathias_contribution/Overview_extracted_data_GEE.json

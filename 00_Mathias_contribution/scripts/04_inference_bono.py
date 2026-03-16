@@ -51,12 +51,18 @@ _ckpts       = [f for f in os.listdir(MODELS_DIR) if f.endswith(".ckpt")]
 CHECKPOINT_PATH = os.path.join(MODELS_DIR, _ckpts[0]) if _ckpts else os.path.join(MODELS_DIR, "prithvi-v2-300-best.ckpt")
 # ↑ Verwendet automatisch die erste .ckpt-Datei in models/ (z.B. prithvi-v2-300-epoch=16-val_loss=0.0000.ckpt)
 
-# ── Normalization statistics (from SmallMinesDS training) ──────────────────────
-MEANS = np.array([1473.81, 1703.35, 1696.68, 3832.40, 3156.11, 2226.07], dtype=np.float32)
-STDS  = np.array([ 223.44,  285.54,  413.82,  389.61,  451.50,  468.27], dtype=np.float32)
+# ── Normalization statistics ───────────────────────────────────────────────────
+# TEST A: Bono-specific statistics (computed from all 16 test patches)
+# These replace SmallMinesDS stats to check if domain-shift in value range is
+# the reason the model predicts 0% everywhere.
+# SmallMinesDS stats (original): [1473.81, 1703.35, 1696.68, 3832.40, 3156.11, 2226.07]
+MEANS = np.array([ 583.63,  851.72, 1241.71, 2411.21, 3027.37, 2290.58], dtype=np.float32)
+STDS  = np.array([ 157.83,  227.45,  348.81,  717.34,  828.90,  609.14], dtype=np.float32)
 
 PATCH_SIZE     = 128
 MINING_THRESH  = 0.5   # probability threshold for binary mask
+# Suffix für Ausgabedateien, damit alte Ergebnisse nicht überschrieben werden (z. B. "_6band"; "" = überschreiben)
+OUTPUT_SUFFIX  = "_6band"
 
 
 def load_model(checkpoint_path):
@@ -172,7 +178,7 @@ def save_geotiff(path, data, transform, count=1, dtype="float32"):
         dst.write(data[np.newaxis, :, :] if data.ndim == 2 else data)
 
 
-def save_visualization(patches_dir, prob_map, binary_map):
+def save_visualization(patches_dir, prob_map, binary_map, suffix=""):
     """
     Saves a side-by-side visualization:
       Left:  Mining probability heatmap (yellow-red = high probability)
@@ -207,7 +213,7 @@ def save_visualization(patches_dir, prob_map, binary_map):
     axes[2].axis("off")
 
     plt.tight_layout()
-    out_path = os.path.join(patches_dir, "prediction_visualization.png")
+    out_path = os.path.join(patches_dir, f"prediction_visualization{suffix}.png")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     print(f"Visualization saved: {out_path}")
 
@@ -227,9 +233,9 @@ def main():
     # Get georeferencing
     transform = get_full_transform(records)
 
-    # Save prediction GeoTIFFs
-    prob_path   = os.path.join(PATCHES_DIR, "prediction_prob.tif")
-    binary_path = os.path.join(PATCHES_DIR, "prediction_binary.tif")
+    # Save prediction GeoTIFFs (OUTPUT_SUFFIX z. B. "_6band" → neue Dateien, keine Überschreibung)
+    prob_path   = os.path.join(PATCHES_DIR, f"prediction_prob{OUTPUT_SUFFIX}.tif")
+    binary_path = os.path.join(PATCHES_DIR, f"prediction_binary{OUTPUT_SUFFIX}.tif")
 
     save_geotiff(prob_path,   prob_map,   transform, dtype="float32")
     save_geotiff(binary_path, binary_map, transform, dtype="uint8")
@@ -243,7 +249,7 @@ def main():
     print(f"  {binary_path}")
 
     # Save visualization
-    save_visualization(PATCHES_DIR, prob_map, binary_map)
+    save_visualization(PATCHES_DIR, prob_map, binary_map, suffix=OUTPUT_SUFFIX)
 
     print("\nDone. Open the GeoTIFFs in QGIS to overlay with satellite imagery.")
 

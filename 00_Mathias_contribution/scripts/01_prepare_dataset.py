@@ -3,29 +3,25 @@
 =====================
 
 Kurz: Bereitet SmallMinesDS für das Training vor. Liest die Train/Test-Splits aus den
-CSVs, kopiert die Bild- und Masken-Dateien aus der HuggingFace-Ordnerstruktur und
-benennt sie so um, dass sie in die flachen Ordner training/ und validation/ passen
-(Endung _IMG.tif / _MASK.tif). So findet das Training-Skript alle Patches.
+CSVs, extrahiert die 6 korrekten Spektralbänder (B2, B3, B4, B8A, B11, B12) aus den
+13-Band-TIFs und speichert sie als 6-Band-GeoTIFFs in training/ und validation/.
 
-What it does:
-  - Reads train/test splits from the two CSV files (2016 + 2022)
-  - Copies and renames files from the HuggingFace folder structure into the
-    flat training/ and validation/ folders expected by the training script
+WICHTIG – Band-Fix (v2):
+  SmallMinesDS-TIFs haben 13 Bänder. Das Prithvi-Modell erwartet 6 Bänder:
+    B2(Blue), B3(Green), B4(Red), B8A(VNIR_5), B11(SWIR_1), B12(SWIR_2)
+  Die entsprechenden 0-basierten Indizes im 13-Band-Stack sind: [0, 1, 2, 7, 8, 9].
+  Frühere Version kopierte die 13-Band-Dateien unverändert; terratorch nahm dann
+  Bänder 0–5 (B2,B3,B4,B5,B6,B7) → kein B8A, kein SWIR → Band-Mismatch bei Inferenz.
+  Diese Version extrahiert die richtigen 6 Bänder direkt.
 
-HuggingFace structure (input):
-  Hugging_Face_Input/SmallMinesDS/2022/IMAGE/IMG_GH_1755_2022.tif
-  Hugging_Face_Input/SmallMinesDS/2022/MASK/MASK_GH_1755_2022.tif
+HuggingFace 13-Band-Reihenfolge (README):
+  0=Blue, 1=Green, 2=Red, 3=RE1, 4=RE2, 5=RE3, 6=NIR, 7=B8A, 8=SWIR1, 9=SWIR2,
+  10=S1_VV, 11=S1_VH, 12=DEM
 
-Expected training structure (output):
-  data/GhanaMiningPrithvi/training/GH_1755_2022_IMG.tif
-  data/GhanaMiningPrithvi/training/GH_1755_2022_MASK.tif
-  data/GhanaMiningPrithvi/validation/GH_0001_2022_IMG.tif
-  data/GhanaMiningPrithvi/validation/GH_0001_2022_MASK.tif
-
-Why this renaming?
-  The training script uses glob patterns: img_grep="*_IMG.tif" and
-  label_grep="*_MASK.tif". The HuggingFace filenames start with IMG_/MASK_
-  which would NOT match these patterns. Renaming puts the suffix at the end.
+Output (6-Band-GeoTIFFs):
+  data/GhanaMiningPrithvi/training/GH_1755_2022_IMG.tif   (6 bands)
+  data/GhanaMiningPrithvi/training/GH_1755_2022_MASK.tif  (1 band, unchanged)
+  data/GhanaMiningPrithvi/validation/...
 
 Usage:
   python 00_Mathias_contribution/scripts/01_prepare_dataset.py
@@ -35,6 +31,8 @@ Usage:
 import os
 import shutil
 import csv
+import numpy as np
+import rasterio
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 REPO_ROOT       = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,6 +41,10 @@ CSV_2022        = os.path.join(REPO_ROOT, "Hugging_Face_Input", "train_test_spli
 CSV_2016        = os.path.join(REPO_ROOT, "Hugging_Face_Input", "train_test_splits_2016.csv")
 OUT_TRAIN       = os.path.join(REPO_ROOT, "data", "GhanaMiningPrithvi", "training")
 OUT_VAL         = os.path.join(REPO_ROOT, "data", "GhanaMiningPrithvi", "validation")
+
+# 0-based indices of the 6 Prithvi bands in the 13-band SmallMinesDS stack
+# [Blue, Green, Red, B8A, SWIR1, SWIR2] = indices [0, 1, 2, 7, 8, 9]
+BAND_INDICES_6 = [0, 1, 2, 7, 8, 9]
 
 os.makedirs(OUT_TRAIN, exist_ok=True)
 os.makedirs(OUT_VAL, exist_ok=True)
@@ -54,20 +56,18 @@ def read_splits(csv_path):
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            # patch_name looks like: MASK_1755_2022.tif
-            name = row["patch_name"]            # → MASK_1755_2022.tif
-            stem = name.replace("MASK_", "").replace(".tif", "")  # → 1755_2022
+            name = row["patch_name"]
+            stem = name.replace("MASK_", "").replace(".tif", "")
             splits[stem] = row["split"]
     return splits
 
 
-def copy_patch(year, patch_id, split):
+def extract_and_save_patch(year, patch_id, split):
     """
-    patch_id: e.g. '1755'  (zero-padded 4 digits)
-    year:     e.g. '2022'
-    Copies IMG + MASK to the right output folder with correct suffix naming.
+    Reads a 13-band IMG TIF, extracts the 6 correct bands, and writes a new
+    6-band GeoTIFF. Masks (1 band) are copied unchanged.
     """
-    stem = f"GH_{patch_id}_{year}"  # e.g. GH_1755_2022
+    stem = f"GH_{patch_id}_{year}"
 
     src_img  = os.path.join(HF_ROOT, year, "IMAGE", f"IMG_{stem}.tif")
     src_mask = os.path.join(HF_ROOT, year, "MASK",  f"MASK_{stem}.tif")
@@ -83,7 +83,17 @@ def copy_patch(year, patch_id, split):
         print(f"  [WARN] Mask not found: {src_mask}")
         return False
 
-    shutil.copy2(src_img,  dst_img)
+    # Extract 6 bands from the 13-band image
+    with rasterio.open(src_img) as src:
+        profile = src.profile.copy()
+        # rasterio uses 1-based band indices
+        data_6 = src.read([i + 1 for i in BAND_INDICES_6])  # (6, H, W)
+
+    profile.update(count=6)
+    with rasterio.open(dst_img, "w", **profile) as dst:
+        dst.write(data_6)
+
+    # Mask: copy unchanged (1 band)
     shutil.copy2(src_mask, dst_mask)
     return True
 
@@ -93,26 +103,39 @@ def main():
     splits_2022 = read_splits(CSV_2022)
     splits_2016 = read_splits(CSV_2016)
 
+    print(f"Band extraction: 13-band → 6-band (indices {BAND_INDICES_6})")
+    print(f"  = B2(Blue), B3(Green), B4(Red), B8A(VNIR_5), B11(SWIR_1), B12(SWIR_2)")
+
     total, copied, skipped = 0, 0, 0
 
     for year, splits in [("2022", splits_2022), ("2016", splits_2016)]:
         print(f"\nProcessing year {year} ({len(splits)} patches)...")
         for stem, split in splits.items():
-            # stem is like '1755_2022' — extract just the ID part
-            patch_id = stem.split("_")[0]  # '1755'
+            patch_id = stem.split("_")[0]
             total += 1
-            success = copy_patch(year, patch_id, split)
+            success = extract_and_save_patch(year, patch_id, split)
             if success:
                 copied += 1
             else:
                 skipped += 1
+            if copied % 500 == 0 and copied > 0:
+                print(f"  {copied} patches extracted...")
 
     print(f"\n{'='*50}")
-    print(f"Done. {copied}/{total} patches copied, {skipped} skipped.")
+    print(f"Done. {copied}/{total} patches extracted (6 bands), {skipped} skipped.")
     print(f"\nOutput:")
-    print(f"  Training:   {len(os.listdir(OUT_TRAIN))//2} patch pairs  → {OUT_TRAIN}")
-    print(f"  Validation: {len(os.listdir(OUT_VAL))//2} patch pairs   → {OUT_VAL}")
-    print(f"\nNext step: Run 03_train_colab.py on Google Colab or Kaggle.")
+    n_train = len([f for f in os.listdir(OUT_TRAIN) if f.endswith("_IMG.tif")])
+    n_val   = len([f for f in os.listdir(OUT_VAL)   if f.endswith("_IMG.tif")])
+    print(f"  Training:   {n_train} patch pairs  → {OUT_TRAIN}")
+    print(f"  Validation: {n_val} patch pairs   → {OUT_VAL}")
+
+    # Sanity check: verify first output file has 6 bands
+    sample = [f for f in os.listdir(OUT_TRAIN) if f.endswith("_IMG.tif")]
+    if sample:
+        with rasterio.open(os.path.join(OUT_TRAIN, sample[0])) as s:
+            print(f"\n  Verification: {sample[0]} has {s.count} bands (expected 6)")
+
+    print(f"\nNext step: Upload data/GhanaMiningPrithvi/ to Drive, then train on Colab.")
 
 
 if __name__ == "__main__":
