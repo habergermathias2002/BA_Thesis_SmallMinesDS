@@ -22,6 +22,11 @@ models/
 *.pth
 *.torch
 
+# Kaggle Artefakte (Checkpoints, Proof-Bilder, ZIPs)
+Kaggle_Notebook/*.ckpt
+Kaggle_Notebook/*.zip
+Kaggle_Notebook/*.png
+
 # Mikrodaten / sensible Dateien (kompletter Ordner)
 01_Microdata/
 
