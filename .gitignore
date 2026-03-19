@@ -22,10 +22,12 @@ models/
 *.pth
 *.torch
 
-# Kaggle Artefakte (Checkpoints, Proof-Bilder, ZIPs)
-Kaggle_Notebook/*.ckpt
-Kaggle_Notebook/*.zip
-Kaggle_Notebook/*.png
+# Kaggle Artefakte (Checkpoints, ZIPs) – Skripte & Bilder werden getrackt
+*/Kaggle_Notebook/*.ckpt
+*/Kaggle_Notebook/*.zip
+
+# Lokales Dataset-Archiv (nicht pushen)
+GhanaMiningPrithvi.zip
 
 # Mikrodaten / sensible Dateien (kompletter Ordner)
 01_Microdata/
