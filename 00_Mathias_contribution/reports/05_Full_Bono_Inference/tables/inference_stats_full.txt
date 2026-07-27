@@ -1,0 +1,4 @@
+processed=60270
+mining_share=0.0028395788693716816
+ckpt=/kaggle/input/datasets/mathiashaberger/finetuned-checkpoints/prithvi-v2-300-finetuned.ckpt
+mosaic=/kaggle/input/datasets/mathiashaberger/bono-bono-east/Bono_Merged_2025.tif

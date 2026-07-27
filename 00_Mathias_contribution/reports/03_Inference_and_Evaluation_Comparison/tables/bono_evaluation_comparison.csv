@@ -1,0 +1,7 @@
+Metric,Base_Model,FineTuned_Model,Delta_Absolute,Delta_Percent
+Mining IoU,0.000000,0.486215,0.486215,
+Mining F1,,,,
+Mining Accuracy,0.000000,0.668484,0.668484,
+Overall IoU,0.462966,0.715584,0.252618,54.565220
+Overall F1,0.925932,0.947679,0.021747,2.348693
+Test Loss,0.800098,0.203211,-0.596886,-74.601692

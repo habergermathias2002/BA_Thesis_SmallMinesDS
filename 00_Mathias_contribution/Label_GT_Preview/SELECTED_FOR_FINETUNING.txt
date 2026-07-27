@@ -1,0 +1,8 @@
+# Finetuning-Auswahl
+# Trage hier die Dateinamen ein, die du behalten willst (eine pro Zeile).
+# Beispiel:
+# label_04_mining.png
+# label_05_mining.png
+#
+# Alternativ: sag mir einfach die Nummern (z.B. 4,5,6,10-15) — dann filtere ich.
+

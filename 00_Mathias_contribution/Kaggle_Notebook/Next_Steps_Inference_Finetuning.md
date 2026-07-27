@@ -62,9 +62,11 @@ Dieses Dokument beschreibt alle Schritte nach dem Base-Training auf SmallMinesDS
 | Volles Fine-Tuning | ~318 M | 1e-4 | > 50 Patches |
 
 ### To-Do
-- [ ] Kaggle Notebook 2 erstellen: `BA_Thesis_02_Finetuning_Bono.ipynb`
-- [ ] Bono-Daten als neues Kaggle-Dataset hochladen (`bono-labeled-patches`)
-- [ ] Trainieren, besten Checkpoint speichern → `models/prithvi-v2-300-finetuned.ckpt`
+- [x] Kaggle Notebook 2 erstellen: `BA_Thesis_02_Finetuning_Bono.ipynb`
+- [x] Bono-Daten exportiert: `data/GhanaMiningPrithvi_bono/` (65 Patches, stratifiziert 80/20)
+- [ ] Bono-Daten + Base-`last.ckpt` als Kaggle-Datasets hochladen
+- [ ] Fine-Tuning ausführen (Decoder + letzte 4 Encoder-Blöcke; Monitor Val-IoU + F1)
+- [ ] Besten Checkpoint speichern → `models/prithvi-v2-300-finetuned.ckpt`
 
 ---
 
@@ -75,7 +77,10 @@ Dieses Dokument beschreibt alle Schritte nach dem Base-Training auf SmallMinesDS
 - [ ] `04_inference_bono.py` mit Fine-Tuned-Checkpoint ausführen, `OUTPUT_SUFFIX = "_finetuned"`
 - [ ] `plot_bono_test_comparison.py` mit `OUTPUT_SUFFIX = "_finetuned"` ausführen
 - [ ] 4-Panel-Vergleich erstellen: Satellitenbild | Base | Fine-Tuned | Differenz
-- [ ] Optional: volle Bono-Region mit `05_inference_bono_full.py`
+- [x] Eval-Vergleich Base vs. FT: `Notebooks/03_Inference_and_Evaluation_Comparison.ipynb`
+- [x] Skript gehärtet: `05_inference_bono_full.py` (FT-ckpt, Smoke `LIMIT_PATCHES=100`)
+- [ ] Kaggle Voll-Inferenz: `BA_Thesis_03_Full_Bono_Inference.ipynb` (`LIMIT_PATCHES=0`)
+- [ ] Outputs nach `data/inference_bono_full_ft/` + Karte via `06_ghana_map_galamsey_bono.py`
 
 ---
 
