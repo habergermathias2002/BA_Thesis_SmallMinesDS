@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Nkrankwanta (Bia River - HAUPTHOTSPOT)", "typ": "Mining" },
+      "geometry": { "type": "Point", "coordinates": [-3.0485, 7.0215] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Pamu Broma Forest Reserve", "typ": "Forest/Mining" },
+      "geometry": { "type": "Point", "coordinates": [-3.0250, 7.0950] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Chiraa (Tain Basin)", "typ": "Mining" },
+      "geometry": { "type": "Point", "coordinates": [-2.1820, 7.3980] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Nsawkaw (Tain River)", "typ": "Mining" },
+      "geometry": { "type": "Point", "coordinates": [-2.3190, 7.8720] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Kintampo (Pru Area)", "typ": "Mining" },
+      "geometry": { "type": "Point", "coordinates": [-1.7300, 8.0560] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Prang (Pru River)", "typ": "Mining" },
+      "geometry": { "type": "Point", "coordinates": [-0.8870, 7.9940] }
+    }
+  ]
+}

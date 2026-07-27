@@ -28,11 +28,14 @@ from rasterio.warp import reproject, Resampling, calculate_default_transform
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Prediction raster: prefer full Bono inference, else test region
-# Use PROB raster so we can show low probabilities (model often predicts all ~0; prob still shows structure)
+# Prediction raster preference: FT full → legacy full → test region
+PRED_PROB_FT = os.path.join(REPO_ROOT, "data", "inference_bono_full_ft", "prediction_prob.tif")
 PRED_PROB_FULL = os.path.join(REPO_ROOT, "data", "inference_bono_full", "prediction_prob.tif")
 PRED_PROB_TEST = os.path.join(REPO_ROOT, "data", "patches_bono_test", "prediction_prob.tif")
 OUT_MAP_PATH = os.path.join(REPO_ROOT, "data", "ghana_map_galamsey_bono.png")
+OUT_MAP_REPORT = os.path.join(
+    REPO_ROOT, "reports", "05_Full_Bono_Inference", "figures", "ghana_map_galamsey_bono_ft.png"
+)
 # Show red where Mining prob > 0; alpha scaled so even tiny probs are visible
 PROB_THRESH = 0.0
 
@@ -103,15 +106,21 @@ def reproject_prob_to_wgs84(prob_path):
 
 
 def main():
-    # 1) Prediction probability raster path
-    if os.path.exists(PRED_PROB_FULL):
+    # 1) Prediction probability raster path (prefer Fine-Tuned full inference)
+    if os.path.exists(PRED_PROB_FT):
+        pred_path = PRED_PROB_FT
+        title_suffix = "Bono region (fine-tuned full inference)"
+    elif os.path.exists(PRED_PROB_FULL):
         pred_path = PRED_PROB_FULL
         title_suffix = "Bono region (full inference)"
     elif os.path.exists(PRED_PROB_TEST):
         pred_path = PRED_PROB_TEST
         title_suffix = "Bono test area (5×5 km)"
     else:
-        print("No prediction raster found. Run 04_inference_bono.py or 05_inference_bono_full.py first.")
+        print(
+            "No prediction raster found. Run 05_inference_bono_full.py "
+            "(→ data/inference_bono_full_ft/) first."
+        )
         return
 
     # 2) Load Ghana regions (WGS84)
@@ -185,6 +194,10 @@ def main():
     os.makedirs(os.path.dirname(OUT_MAP_PATH), exist_ok=True)
     plt.savefig(OUT_MAP_PATH, dpi=150, bbox_inches="tight", facecolor="white")
     print(f"Map saved: {OUT_MAP_PATH}")
+
+    os.makedirs(os.path.dirname(OUT_MAP_REPORT), exist_ok=True)
+    plt.savefig(OUT_MAP_REPORT, dpi=200, bbox_inches="tight", facecolor="white")
+    print(f"Map saved: {OUT_MAP_REPORT}")
     plt.close()
 
 

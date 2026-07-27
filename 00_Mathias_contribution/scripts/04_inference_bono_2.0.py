@@ -5,17 +5,18 @@
 PROJEKT: Mapping von Artisanal and Small-Scale Gold Mines (Galamsey)
 BESCHREIBUNG: Inferenz-Script unter Verwendung des Prithvi-v2-300 Foundation Models.
 
-METHODIK (Domain Adaptation):
-Dieses Script implementiert ein "Z-Score Domain Alignment". Da die Inferenz-Daten (Bono 2025) 
-eine signifikant andere radiometrische Verteilung (Domain Shift) aufweisen als die 
-Original-Trainingsdaten (SmallMinesDS 2016/2022), führt eine standardmäßige 
-Normalisierung zu Fehlklassifikationen. 
+METHODIK (Domain Alignment via Distribution Matching):
+Dieses Script implementiert ein echtes "Z-Score Domain Alignment". Da die Inferenz-Daten 
+(Bono 2025) eine signifikant andere radiometrische Verteilung (Domain Shift) aufweisen als 
+die Original-Trainingsdaten (SmallMinesDS 2016/2022), führt eine standardmäßige 
+Normalisierung zu massiven Fehlklassifikationen (Overprediction). 
 
 Der Fix transformiert die Pixelwerte wie folgt:
-1. Lokale Zentrierung: (Pixel - Bono_Mean) / Bono_Std
+1. Lokaler Z-Score: (Pixel - Bono_Mean) / Bono_Std
    Dies bringt die Daten in einen "neutralen" statistischen Raum (Mittelwert 0, Varianz 1).
-2. Da der Prithvi-Encoder auf ebendiese Z-Scores trainiert wurde, wird so die 
-   Kompatibilität zwischen den Zeitpunkten (2022 vs. 2025) wiederhergestellt.
+2. Domain Alignment: (Z_Score * Train_Std) + Train_Mean
+   Projiziert die Pixel in die exakte statistische Verteilung, die das Prithvi-Modell 
+   während des Trainings (auf SmallMinesDS) gelernt hat.
 
 OUTPUT:
   - prediction_binary_aligned.tif (Binäre Maske: 0=Kein Mining, 1=Mining)
@@ -99,10 +100,13 @@ def align_and_normalize(patch):
     Führt das Z-Score Domain Alignment durch. 
     Bringt das Bono-Patch in den statistischen Raum, den das Modell im Training gelernt hat.
     """
-    # Schritt: Zentrierung auf Basis der Bono-Statistik
-    # Formel: (x - mean_local) / std_local
-    neutral = (patch - BONO_MEANS[:, None, None]) / BONO_STDS[:, None, None]
-    return neutral
+    # Schritt 1: Lokaler Z-Score (Wo liegt der Pixel in der Bono-Welt?)
+    z_score_bono = (patch - BONO_MEANS[:, None, None]) / BONO_STDS[:, None, None]
+    
+    # Schritt 2: Projektion in die Trainings-Welt (SmallMinesDS)
+    aligned_patch = (z_score_bono * TRAIN_STDS[:, None, None]) + TRAIN_MEANS[:, None, None]
+    
+    return aligned_patch
 
 def run_inference(task, device, patches_dir):
     """Führt Inferenz für alle Patches im Verzeichnis aus."""
@@ -196,4 +200,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    

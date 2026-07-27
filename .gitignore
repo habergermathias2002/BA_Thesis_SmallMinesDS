@@ -2,11 +2,14 @@ output*
 .DS_Store
 .venv/
 Miniforge3-MacOSX-arm64.sh
+__pycache__/
+*.pyc
 
 # ── Große Daten (nicht pushen) ─────────────────────────────────────────────
 data/raw/
 data/patches_bono_test/
 data/inference_bono_full/
+data/inference_bono_full_ft/
 data/GhanaMiningPrithvi/
 data/cache/
 data/ghana_map_galamsey_bono.png
@@ -31,5 +34,8 @@ GhanaMiningPrithvi.zip
 
 # Mikrodaten / sensible Dateien (kompletter Ordner)
 01_Microdata/
+
+# Altlasten / Archiv (nicht mehr benötigt)
+00_Mathias_contribution/99_old/
 
 00_Mathias_contribution/Overview_extracted_data_GEE.json

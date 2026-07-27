@@ -1,0 +1,5 @@
+# Finale Auswahl — Nummern oder Dateinamen, eine pro Zeile
+# Beispiel:
+# 4
+# 10-15
+# label_004_mining.png

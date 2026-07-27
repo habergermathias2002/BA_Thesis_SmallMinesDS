@@ -1,0 +1,11 @@
+checkpoint=/Users/mathias/dev/BA_Thesis_SmallMinesDS/models/prithvi-v2-300-finetuned.ckpt
+mosaic=/Users/mathias/dev/BA_Thesis_SmallMinesDS/data/raw/Bono_Merged_2025.tif
+limit_patches=100
+processed=100
+output_size=36736x128
+mining_pixels=537
+valid_pixels=1638400
+mining_share=0.000328
+threshold=0.5
+prob=/Users/mathias/dev/BA_Thesis_SmallMinesDS/data/inference_bono_full_ft/prediction_prob.tif
+binary=/Users/mathias/dev/BA_Thesis_SmallMinesDS/data/inference_bono_full_ft/prediction_binary.tif

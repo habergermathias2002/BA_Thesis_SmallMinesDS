@@ -1,0 +1,10 @@
+| Variable | (1) | (2) | (3) |
+|---|---:|---:|---:|
+| Galamsey area within 5 km (ha) | 0.019*** | 0.011 | -0.014** |
+|  | (0.007) | (0.007) | (0.006) |
+| Controls | Yes | Yes | Yes |
+| District FE | Yes | Yes | Yes |
+| N | 410 | 405 | 409 |
+| R² | 0.176 | 0.031 | 0.052 |
+
+*Notes:* Community-clustered robust SE in parentheses. Controls included. District FE included. \* *p*<0.1, \*\* *p*<0.05, \*\*\* *p*<0.01.
